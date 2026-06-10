@@ -2,10 +2,80 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Chat AI Test</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Chat</title>
+
+<style>
+body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 10px; }
+input, button { width: 100%; padding: 10px; margin-top: 5px; }
+#chat { height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 10px; }
+.msg { margin: 8px 0; white-space: pre-wrap; }
+</style>
 </head>
+
 <body>
-<h1>✅ 网站已运行成功</h1>
-<p>如果你看到这行，说明GitHub Pages部署成功了。</p >
+
+<h2>AI Chat</h2>
+
+<input id="base" placeholder="Base URL (https://ai-us.hctopup.com/v1)">
+<input id="key" placeholder="API Key">
+<input id="model" placeholder="model (claude-opus-4-7)">
+
+<div id="chat"></div>
+
+<input id="input" placeholder="输入消息">
+<button onclick="send()">发送</button>
+
+<script>
+
+let messages = [];
+
+function render(){
+  let c = document.getElementById("chat");
+  c.innerHTML = "";
+  messages.forEach(m=>{
+    let div = document.createElement("div");
+    div.className = "msg";
+    div.innerText = (m.role==="user"?"你: ":"AI: ") + m.content;
+    c.appendChild(div);
+  });
+}
+
+async function send(){
+  let text = input.value;
+  if(!text) return;
+
+  let base = document.getElementById("base").value;
+  let key = document.getElementById("key").value;
+  let model = document.getElementById("model").value;
+
+  messages.push({role:"user", content:text});
+  render();
+
+  let res = await fetch(base + "/chat/completions", {
+    method:"POST",
+    headers:{
+      "Content-Type":"application/json",
+      "Authorization":"Bearer " + key
+    },
+    body: JSON.stringify({
+      model,
+      messages
+    })
+  });
+
+  let data = await res.json();
+  let reply = data.choices[0].message.content;
+
+  messages.push({role:"assistant", content:reply});
+  render();
+
+  input.value = "";
+}
+
+render();
+
+</script>
+
 </body>
 </html>
