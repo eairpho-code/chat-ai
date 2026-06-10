@@ -8,10 +8,10 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 10px; }
-input, button { width: 100%; padding: 10px; margin-top: 5px; }
+body { font-family: sans-serif; max-width: 720px; margin: auto; padding: 10px; }
+input, button { width: 100%; padding: 10px; margin-top: 6px; }
 #chat { height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 10px; }
-.msg { margin: 8px 0; white-space: pre-wrap; padding: 6px; border-radius: 6px; }
+.msg { margin: 8px 0; padding: 6px; border-radius: 6px; white-space: pre-wrap; }
 .user { background: #dbeafe; }
 .ai { background: #dcfce7; }
 </style>
@@ -21,9 +21,9 @@ input, button { width: 100%; padding: 10px; margin-top: 5px; }
 
 <h2>Cloud AI Chat</h2>
 
-<input id="base" placeholder="Base URL (https://ai-us.hctopup.com/v1)">
+<input id="base" placeholder="Base URL">
 <input id="key" placeholder="API Key">
-<input id="model" placeholder="model (claude-opus-4-7)">
+<input id="model" placeholder="Model">
 
 <div id="chat"></div>
 
@@ -33,34 +33,65 @@ input, button { width: 100%; padding: 10px; margin-top: 5px; }
 <script>
 
 /* =========================
-   1. Supabase配置（必填）
+   Supabase配置（你必须填）
 ========================= */
-const SUPABASE_URL = "填你的URL";
-const SUPABASE_KEY = "填你的anon key";
+const SUPABASE_URL = "https://dhwrlcmqhwddzsuujldv.supabase.co";
+const SUPABASE_KEY = "sb_publishable_qjIyiUHceLSyex8HOfA6jw_vjp03ErK";
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* =========================
-   2. UI渲染
+   DOM
+========================= */
+const base = document.getElementById("base");
+const key = document.getElementById("key");
+const model = document.getElementById("model");
+const input = document.getElementById("input");
+
+/* =========================
+   本地配置存储（重点）
+========================= */
+function saveConfig(){
+  localStorage.setItem("base", base.value);
+  localStorage.setItem("key", key.value);
+  localStorage.setItem("model", model.value);
+}
+
+function loadConfig(){
+  base.value = localStorage.getItem("base") || "";
+  key.value = localStorage.getItem("key") || "";
+  model.value = localStorage.getItem("model") || "";
+}
+
+/* 自动保存 */
+base.oninput = saveConfig;
+key.oninput = saveConfig;
+model.oninput = saveConfig;
+
+/* =========================
+   聊天数据
 ========================= */
 let messages = [];
 
+/* =========================
+   渲染
+========================= */
 function render(){
-  let chat = document.getElementById("chat");
+  const chat = document.getElementById("chat");
   chat.innerHTML = "";
 
   messages.forEach(m=>{
-    let div = document.createElement("div");
+    const div = document.createElement("div");
     div.className = "msg " + (m.role === "user" ? "user" : "ai");
     div.innerText = (m.role === "user" ? "你: " : "AI: ") + m.content;
     chat.appendChild(div);
   });
 
-  chat.scrollTop = 999999;
+  chat.scrollTop = chat.scrollHeight;
 }
 
 /* =========================
-   3. 从云端加载聊天记录
+   从Supabase加载聊天记录
 ========================= */
 async function loadMessages(){
   let { data } = await supabase
@@ -72,36 +103,30 @@ async function loadMessages(){
   render();
 }
 
-loadMessages();
-
 /* =========================
-   4. 发送消息
+   发送消息
 ========================= */
 async function send(){
-  let text = document.getElementById("input").value;
+  const text = input.value;
   if(!text) return;
 
-  let base = document.getElementById("base").value;
-  let key = document.getElementById("key").value;
-  let model = document.getElementById("model").value;
+  input.value = "";
 
-  document.getElementById("input").value = "";
-
-  // 1. 存用户消息
+  /* 1. 存用户消息 */
   await supabase.from("messages").insert({
     role: "user",
     content: text
   });
 
-  // 2. 调AI API
-  let res = await fetch(base + "/chat/completions", {
+  /* 2. 调AI */
+  let res = await fetch(base.value + "/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": "Bearer " + key
+      "Authorization": "Bearer " + key.value
     },
     body: JSON.stringify({
-      model,
+      model: model.value,
       messages: messages
     })
   });
@@ -109,15 +134,21 @@ async function send(){
   let data = await res.json();
   let reply = data.choices?.[0]?.message?.content || "出错了";
 
-  // 3. 存AI回复
+  /* 3. 存AI回复 */
   await supabase.from("messages").insert({
     role: "assistant",
     content: reply
   });
 
-  // 4. 重新加载
+  /* 4. 刷新 */
   loadMessages();
 }
+
+/* =========================
+   初始化
+========================= */
+loadConfig();
+loadMessages();
 
 </script>
 
