@@ -3,27 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cloud AI Chat</title>
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<title>AI Chat</title>
 
 <style>
-body { font-family: sans-serif; max-width: 720px; margin: auto; padding: 10px; }
-input, button { width: 100%; padding: 10px; margin-top: 6px; }
-#chat { height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 10px; }
-.msg { margin: 8px 0; padding: 6px; border-radius: 6px; white-space: pre-wrap; }
-.user { background: #dbeafe; }
-.ai { background: #dcfce7; }
+body {
+  font-family: sans-serif;
+  max-width: 700px;
+  margin: auto;
+  padding: 10px;
+}
+
+input, button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 5px;
+  box-sizing: border-box;
+}
+
+#chat {
+  height: 60vh;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 10px;
+}
+
+.msg {
+  margin: 8px 0;
+  white-space: pre-wrap;
+}
 </style>
 </head>
 
 <body>
 
-<h2>Cloud AI Chat</h2>
+<h2>AI Chat</h2>
 
-<input id="base" placeholder="Base URL">
+<input id="base" placeholder="Base URL (https://ai-us.hctopup.com/v1)">
 <input id="key" placeholder="API Key">
-<input id="model" placeholder="Model">
+<input id="model" placeholder="model (claude-opus-4-7)">
 
 <div id="chat"></div>
 
@@ -32,123 +49,145 @@ input, button { width: 100%; padding: 10px; margin-top: 6px; }
 
 <script>
 
-/* =========================
-   Supabase配置（你必须填）
-========================= */
-const SUPABASE_URL = "https://dhwrlcmqhwddzsuujldv.supabase.co";
-const SUPABASE_KEY = "sb_publishable_qjIyiUHceLSyex8HOfA6jw_vjp03ErK";
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-/* =========================
-   DOM
-========================= */
 const base = document.getElementById("base");
 const key = document.getElementById("key");
 const model = document.getElementById("model");
 const input = document.getElementById("input");
 
+let messages = [];
+
 /* =========================
-   本地配置存储（重点）
-========================= */
-function saveConfig(){
+   自动保存
+========================= /
+
+function saveAll() {
+  localStorage.setItem("messages", JSON.stringify(messages));
   localStorage.setItem("base", base.value);
   localStorage.setItem("key", key.value);
   localStorage.setItem("model", model.value);
 }
 
-function loadConfig(){
+function loadAll() {
+
+  const savedMessages = localStorage.getItem("messages");
+
+  if (savedMessages) {
+    try {
+      messages = JSON.parse(savedMessages);
+    } catch(e) {
+      messages = [];
+    }
+  }
+
   base.value = localStorage.getItem("base") || "";
   key.value = localStorage.getItem("key") || "";
   model.value = localStorage.getItem("model") || "";
 }
 
-/* 自动保存 */
-base.oninput = saveConfig;
-key.oninput = saveConfig;
-model.oninput = saveConfig;
+/ 配置变化自动保存 /
 
-/* =========================
-   聊天数据
-========================= */
-let messages = [];
+base.oninput = saveAll;
+key.oninput = saveAll;
+model.oninput = saveAll;
 
-/* =========================
+/ =========================
    渲染
-========================= */
-function render(){
-  const chat = document.getElementById("chat");
-  chat.innerHTML = "";
+========================= /
 
-  messages.forEach(m=>{
-    const div = document.createElement("div");
-    div.className = "msg " + (m.role === "user" ? "user" : "ai");
-    div.innerText = (m.role === "user" ? "你: " : "AI: ") + m.content;
-    chat.appendChild(div);
+function render() {
+
+  let c = document.getElementById("chat");
+  c.innerHTML = "";
+
+  messages.forEach(m => {
+
+    let div = document.createElement("div");
+
+    div.className = "msg";
+
+    div.innerText =
+      (m.role === "user" ? "你: " : "AI: ")
+      + m.content;
+
+    c.appendChild(div);
   });
 
-  chat.scrollTop = chat.scrollHeight;
+  c.scrollTop = c.scrollHeight;
+
+  saveAll();
 }
 
-/* =========================
-   从Supabase加载聊天记录
-========================= */
-async function loadMessages(){
-  let { data } = await supabase
-    .from("messages")
-    .select("*")
-    .order("created_at", { ascending: true });
+/ =========================
+   发送
+========================= /
 
-  messages = data || [];
-  render();
-}
+async function send() {
 
-/* =========================
-   发送消息
-========================= */
-async function send(){
-  const text = input.value;
-  if(!text) return;
+  let text = input.value.trim();
 
-  input.value = "";
+  if (!text) return;
 
-  /* 1. 存用户消息 */
-  await supabase.from("messages").insert({
+  let baseUrl = base.value.trim();
+  let apiKey = key.value.trim();
+  let modelName = model.value.trim();
+
+  messages.push({
     role: "user",
     content: text
   });
 
-  /* 2. 调AI */
-  let res = await fetch(base.value + "/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + key.value
-    },
-    body: JSON.stringify({
-      model: model.value,
-      messages: messages
-    })
-  });
+  render();
 
-  let data = await res.json();
-  let reply = data.choices?.[0]?.message?.content || "出错了";
+  input.value = "";
 
-  /* 3. 存AI回复 */
-  await supabase.from("messages").insert({
-    role: "assistant",
-    content: reply
-  });
+  try {
 
-  /* 4. 刷新 */
-  loadMessages();
+    let res = await fetch(baseUrl + "/chat/completions", {
+
+      method: "POST",
+
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey
+      },
+
+      body: JSON.stringify({
+        model: modelName,
+        messages: messages
+      })
+
+    });
+
+    let data = await res.json();
+
+    let reply =
+      data?.choices?.[0]?.message?.content
+      || JSON.stringify(data);
+
+    messages.push({
+      role: "assistant",
+      content: reply
+    });
+
+    render();
+
+  } catch(err) {
+
+    messages.push({
+      role: "assistant",
+      content: "请求失败：\n" + err.message
+    });
+
+    render();
+  }
 }
 
-/* =========================
+/ =========================
    初始化
 ========================= */
-loadConfig();
-loadMessages();
+
+loadAll();
+render();
 
 </script>
 
