@@ -3,19 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI Chat</title>
+<title>Cloud AI Chat</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 body { font-family: sans-serif; max-width: 700px; margin: auto; padding: 10px; }
 input, button { width: 100%; padding: 10px; margin-top: 5px; }
 #chat { height: 60vh; overflow-y: auto; border: 1px solid #ddd; padding: 10px; }
-.msg { margin: 8px 0; white-space: pre-wrap; }
+.msg { margin: 8px 0; white-space: pre-wrap; padding: 6px; border-radius: 6px; }
+.user { background: #dbeafe; }
+.ai { background: #dcfce7; }
 </style>
 </head>
 
 <body>
 
-<h2>AI Chat</h2>
+<h2>Cloud AI Chat</h2>
 
 <input id="base" placeholder="Base URL (https://ai-us.hctopup.com/v1)">
 <input id="key" placeholder="API Key">
@@ -28,52 +32,92 @@ input, button { width: 100%; padding: 10px; margin-top: 5px; }
 
 <script>
 
+/* =========================
+   1. Supabase配置（必填）
+========================= */
+const SUPABASE_URL = "填你的URL";
+const SUPABASE_KEY = "填你的anon key";
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* =========================
+   2. UI渲染
+========================= */
 let messages = [];
 
 function render(){
-  let c = document.getElementById("chat");
-  c.innerHTML = "";
+  let chat = document.getElementById("chat");
+  chat.innerHTML = "";
+
   messages.forEach(m=>{
     let div = document.createElement("div");
-    div.className = "msg";
-    div.innerText = (m.role==="user"?"你: ":"AI: ") + m.content;
-    c.appendChild(div);
+    div.className = "msg " + (m.role === "user" ? "user" : "ai");
+    div.innerText = (m.role === "user" ? "你: " : "AI: ") + m.content;
+    chat.appendChild(div);
   });
+
+  chat.scrollTop = 999999;
 }
 
+/* =========================
+   3. 从云端加载聊天记录
+========================= */
+async function loadMessages(){
+  let { data } = await supabase
+    .from("messages")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  messages = data || [];
+  render();
+}
+
+loadMessages();
+
+/* =========================
+   4. 发送消息
+========================= */
 async function send(){
-  let text = input.value;
+  let text = document.getElementById("input").value;
   if(!text) return;
 
   let base = document.getElementById("base").value;
   let key = document.getElementById("key").value;
   let model = document.getElementById("model").value;
 
-  messages.push({role:"user", content:text});
-  render();
+  document.getElementById("input").value = "";
 
+  // 1. 存用户消息
+  await supabase.from("messages").insert({
+    role: "user",
+    content: text
+  });
+
+  // 2. 调AI API
   let res = await fetch(base + "/chat/completions", {
-    method:"POST",
-    headers:{
-      "Content-Type":"application/json",
-      "Authorization":"Bearer " + key
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + key
     },
     body: JSON.stringify({
       model,
-      messages
+      messages: messages
     })
   });
 
   let data = await res.json();
-  let reply = data.choices[0].message.content;
+  let reply = data.choices?.[0]?.message?.content || "出错了";
 
-  messages.push({role:"assistant", content:reply});
-  render();
+  // 3. 存AI回复
+  await supabase.from("messages").insert({
+    role: "assistant",
+    content: reply
+  });
 
-  input.value = "";
+  // 4. 重新加载
+  loadMessages();
 }
-
-render();
 
 </script>
 
